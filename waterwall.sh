@@ -7,7 +7,7 @@ SERVICE_NAME="waterwall"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 CONFIG_FILE="${INSTALL_DIR}/config.json"
 CORE_FILE="${INSTALL_DIR}/core.json"
-CORE_URL="https://raw.githubusercontent.com/logi443/packet/main/core.json"
+CORE_URL="https://raw.githubusercontent.com/morgondev/waterwall/main/core.json"
 GITHUB_REPO="radkesvat/WaterWall"
 OPTIMIZE_MARKER="/etc/waterwall_optimize.ver"
 OPTIMIZE_VERSION="3"
@@ -381,21 +381,39 @@ function download_waterwall() {
     arch="$(uname -m)"
     log "Detecting CPU architecture: $arch"
 
-    echo
-    read -rp "Download old CPU build? (y/n): " oldcpu
-    oldcpu="$(echo "$oldcpu" | tr '[:upper:]' '[:lower:]')"
+    # Auto-detect AVX2 support for old CPU build selection
+    local oldcpu="no"
+    case "$arch" in
+        x86_64|amd64)
+            if grep -q avx2 /proc/cpuinfo 2>/dev/null; then
+                log "CPU supports AVX2 - using standard build."
+            else
+                oldcpu="yes"
+                log "CPU does NOT support AVX2 - using old CPU build."
+            fi
+            ;;
+        aarch64|arm64)
+            # ARM: check for specific features (SHA2/AES as proxy for modern ARM)
+            if grep -qE '(sha2|aes)' /proc/cpuinfo 2>/dev/null; then
+                log "Modern ARM CPU detected - using standard build."
+            else
+                oldcpu="yes"
+                log "Older ARM CPU detected - using old CPU build."
+            fi
+            ;;
+    esac
 
     local asset_name=""
     case "$arch" in
         x86_64|amd64)
-            if [[ "$oldcpu" == "y" || "$oldcpu" == "yes" ]]; then
+            if [[ "$oldcpu" == "yes" ]]; then
                 asset_name="Waterwall-linux-gcc-x64-old-cpu.zip"
             else
                 asset_name="Waterwall-linux-gcc-x64.zip"
             fi
             ;;
         aarch64|arm64)
-            if [[ "$oldcpu" == "y" || "$oldcpu" == "yes" ]]; then
+            if [[ "$oldcpu" == "yes" ]]; then
                 asset_name="Waterwall-linux-gcc-arm64-old-cpu.zip"
             else
                 asset_name="Waterwall-linux-gcc-arm64.zip"
